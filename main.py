@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # Define the Two-compartment IV bolus model
-def two_compartment_model(t, params, weight, amount, scr, age):
+def two_compartment_model(t, params, weight, amount, scr, age, evid):
     """
     Calculate the concentration of drug in two-compartments after an IV bolus dose
     t: time array (hours)
@@ -19,12 +19,9 @@ def two_compartment_model(t, params, weight, amount, scr, age):
     amount: Dose amount (mg)
     scr: Serum creatinine (mg/dL)
     age: Patient's age (years)
+    evid: Event indicator (1 for dose, 0 for observation)
     """
     # Use the Cockcroft-Gault equation to estimate creatinine clearance (Clcr)
-    # For male patients, the formula is:
-    # Clcr = ((140 - age) * weight) / (72 * scr)
-    # For female patients, multiply by 0.85 (adjustment for gender)
-
     sex_factor = 1.0  # Adjust to 0.85 for females
     clcr = ((140 - age) * weight) / (72 * scr) * sex_factor  # Creatinine clearance in mL/min
 
@@ -56,7 +53,8 @@ def two_compartment_model(t, params, weight, amount, scr, age):
     # Adjust the initial dose (amount) over time (assuming instant IV bolus)
     total_conc = amount / (V1 + V2) * total_conc  # Adjust concentration based on dose
 
-    return total_conc
+    # If EVID = 0 (observation), return drug concentration, otherwise return 0 (no concentration at dose event)
+    return total_conc if evid == 0 else 0
 
 
 # Define population parameter estimation
@@ -77,7 +75,9 @@ def population_parameter_estimation(data, initial_params):
             amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
             scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
             age = patient_data['age'].iloc[0]  # Assuming constant age for each patient
-            predicted_conc = two_compartment_model(t, params, weight, amount, scr, age)
+            evid = patient_data['evid'].values  # Event indicator (EVID)
+            predicted_conc = np.array([two_compartment_model(ti, params, weight, amount, scr, age, ev)
+                                       for ti, ev in zip(t, evid)])
             error += np.sum((observed_conc - predicted_conc) ** 2)
         return error
 
@@ -99,10 +99,12 @@ def individual_parameter_estimation(patient_data, initial_params):
     amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
     scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
     age = patient_data['age'].iloc[0]  # Assuming constant age for each patient
+    evid = patient_data['evid'].values  # Event indicator (EVID)
 
     # Define the objective function for individual parameter estimation
     def objective(params):
-        predicted_conc = two_compartment_model(t, params, weight, amount, scr, age)
+        predicted_conc = np.array([two_compartment_model(ti, params, weight, amount, scr, age, ev)
+                                   for ti, ev in zip(t, evid)])
         return np.sum((observed_conc - predicted_conc) ** 2)
 
     # Optimize the individual parameters for this patient
@@ -123,7 +125,7 @@ def calculate_shrinkage(individual_params, population_params):
 
 # Example usage
 # Simulated data (replace with real patient data)
-# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt', 'scr', 'age'
+# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt', 'scr', 'age', 'evid'
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
     'time': [0, 1, 2, 0, 1, 2],
@@ -131,7 +133,8 @@ data = pd.DataFrame({
     'weight': [70, 70, 70, 80, 80, 80],  # Weight of each patient in kg
     'amt': [1000, 1000, 1000, 1200, 1200, 1200],  # Dose amount (mg)
     'scr': [1.2, 1.2, 1.2, 1.5, 1.5, 1.5],  # Serum creatinine (mg/dL)
-    'age': [45, 45, 45, 60, 60, 60]  # Age of each patient (years)
+    'age': [45, 45, 45, 60, 60, 60],  # Age of each patient (years)
+    'evid': [1, 0, 0, 1, 0, 0]  # Event Indicator (1 = dose, 0 = observation)
 })
 
 # Initial guess for population parameters [V1, V2, CL1, CL2, Q]
