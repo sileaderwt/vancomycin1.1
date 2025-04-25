@@ -190,3 +190,39 @@ print(f"Shrinkage: {shrinkage:.2f}%")
 
 # Plot CWRES as dots
 plot_cwres(data, individuals, pop_params)
+
+import matplotlib.pyplot as plt
+
+# Define the therapeutic range (e.g., 5–10 mg/L)
+THERAPEUTIC_RANGE_MIN = 5.0
+THERAPEUTIC_RANGE_MAX = 10.0
+
+# Function to determine the proportion in the therapeutic range
+def proportion_in_therapeutic_range(concentrations):
+    return np.sum((concentrations >= THERAPEUTIC_RANGE_MIN) & (concentrations <= THERAPEUTIC_RANGE_MAX)) / len(concentrations)
+
+# Simulate dose adjustments and calculate proportions in the therapeutic range
+def simulate_proportions_in_therapeutic_range(data, pop_params):
+    proportions = []
+    for pid, pdata in data.groupby('patient'):
+        times, concs = solve_two_compartment(pdata, pop_params)
+        proportion = proportion_in_therapeutic_range(concs)
+        proportions.append(proportion)
+    return proportions
+
+# Generate the boxplot of the proportions in the therapeutic range
+def plot_boxplot_of_proportions(proportions):
+    print(proportions)
+    plt.figure(figsize=(8, 6))
+    plt.boxplot(proportions, vert=False)
+    plt.title('Proportion of Patients in Therapeutic Range')
+    plt.xlabel('Proportion in Therapeutic Range')
+    plt.grid(True)
+    plt.show()
+
+# Simulate the proportions for all patients
+proportions = simulate_proportions_in_therapeutic_range(data, pop_params)
+
+# Plot the boxplot
+plot_boxplot_of_proportions(proportions)
+
