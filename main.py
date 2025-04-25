@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # Define the Two-compartment IV bolus model
-def two_compartment_model(t, params):
+def two_compartment_model(t, params, weight, amount):
     """
     Calculate the concentration of drug in two-compartments after an IV bolus dose
     t: time array (hours)
@@ -15,22 +15,33 @@ def two_compartment_model(t, params):
         - CL1: Clearance from compartment 1 (L/h)
         - CL2: Clearance from compartment 2 (L/h)
         - Q: Inter-compartmental clearance (L/h)
+    weight: Patient's weight (kg)
+    amount: Dose amount (mg)
     """
+    # Scale the parameters by weight (assuming 70 kg as the reference weight)
     V1, V2, CL1, CL2, Q = params
-    # Define the differential equations for the two-compartment model
+    V1 *= weight / 70
+    V2 *= weight / 70
+    CL1 *= weight / 70
+    CL2 *= weight / 70
+
+    # Define the elimination rate constants
     k10 = CL1 / V1  # Elimination rate constant for compartment 1
     k12 = Q / V1  # Rate constant for transfer from compartment 1 to 2
     k21 = Q / V2  # Rate constant for transfer from compartment 2 to 1
 
     # Solve the system of differential equations (approximated numerically here)
-    # Assumption: IV bolus dose at t = 0 (dose = D)
     # Concentrations in the two compartments at time t
-    # Use the analytical solution for a two-compartment model (simplified approach)
-
     C1 = (np.exp(-k10 * t) * (V1 / (V1 - V2)) + np.exp(-k12 * t) * (V2 / (V2 - V1)))  # Compartment 1 concentration
     C2 = (np.exp(-k21 * t) * (V2 / (V2 - V1)) + np.exp(-k10 * t) * (V1 / (V1 - V2)))  # Compartment 2 concentration
 
-    return C1, C2
+    # Total concentration from both compartments
+    total_conc = C1 + C2
+
+    # Adjust the initial dose (amount) over time (assuming instant IV bolus)
+    total_conc = amount / (V1 + V2) * total_conc  # Adjust concentration based on dose
+
+    return total_conc
 
 
 # Define population parameter estimation
@@ -47,8 +58,9 @@ def population_parameter_estimation(data, initial_params):
         for i, patient_data in data.groupby('patient'):
             t = patient_data['time'].values
             observed_conc = patient_data['conc'].values
-            C1, C2 = two_compartment_model(t, params)
-            predicted_conc = C1 + C2  # Total concentration from both compartments
+            weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
+            amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
+            predicted_conc = two_compartment_model(t, params, weight, amount)
             error += np.sum((observed_conc - predicted_conc) ** 2)
         return error
 
@@ -66,11 +78,12 @@ def individual_parameter_estimation(patient_data, initial_params):
     """
     t = patient_data['time'].values
     observed_conc = patient_data['conc'].values
+    weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
+    amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
 
     # Define the objective function for individual parameter estimation
     def objective(params):
-        C1, C2 = two_compartment_model(t, params)
-        predicted_conc = C1 + C2
+        predicted_conc = two_compartment_model(t, params, weight, amount)
         return np.sum((observed_conc - predicted_conc) ** 2)
 
     # Optimize the individual parameters for this patient
@@ -91,11 +104,13 @@ def calculate_shrinkage(individual_params, population_params):
 
 # Example usage
 # Simulated data (replace with real patient data)
-# Assume patient data with columns: 'patient', 'time', 'conc'
+# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt'
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
     'time': [0, 1, 2, 0, 1, 2],
-    'conc': [10, 5, 2, 12, 6, 3]
+    'conc': [10, 5, 2, 12, 6, 3],
+    'weight': [70, 70, 70, 80, 80, 80],  # Weight of each patient in kg
+    'amt': [1000, 1000, 1000, 1200, 1200, 1200]  # Dose amount (mg)
 })
 
 # Initial guess for population parameters [V1, V2, CL1, CL2, Q]
