@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # Define the Two-compartment IV bolus model
-def two_compartment_model(t, params, weight, amount, scr):
+def two_compartment_model(t, params, weight, amount, scr, age):
     """
     Calculate the concentration of drug in two-compartments after an IV bolus dose
     t: time array (hours)
@@ -18,13 +18,13 @@ def two_compartment_model(t, params, weight, amount, scr):
     weight: Patient's weight (kg)
     amount: Dose amount (mg)
     scr: Serum creatinine (mg/dL)
+    age: Patient's age (years)
     """
     # Use the Cockcroft-Gault equation to estimate creatinine clearance (Clcr)
     # For male patients, the formula is:
     # Clcr = ((140 - age) * weight) / (72 * scr)
     # For female patients, multiply by 0.85 (adjustment for gender)
 
-    age = 30  # Placeholder value for age; this should be replaced by actual patient data
     sex_factor = 1.0  # Adjust to 0.85 for females
     clcr = ((140 - age) * weight) / (72 * scr) * sex_factor  # Creatinine clearance in mL/min
 
@@ -76,7 +76,8 @@ def population_parameter_estimation(data, initial_params):
             weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
             amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
             scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
-            predicted_conc = two_compartment_model(t, params, weight, amount, scr)
+            age = patient_data['age'].iloc[0]  # Assuming constant age for each patient
+            predicted_conc = two_compartment_model(t, params, weight, amount, scr, age)
             error += np.sum((observed_conc - predicted_conc) ** 2)
         return error
 
@@ -97,10 +98,11 @@ def individual_parameter_estimation(patient_data, initial_params):
     weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
     amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
     scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
+    age = patient_data['age'].iloc[0]  # Assuming constant age for each patient
 
     # Define the objective function for individual parameter estimation
     def objective(params):
-        predicted_conc = two_compartment_model(t, params, weight, amount, scr)
+        predicted_conc = two_compartment_model(t, params, weight, amount, scr, age)
         return np.sum((observed_conc - predicted_conc) ** 2)
 
     # Optimize the individual parameters for this patient
@@ -121,14 +123,15 @@ def calculate_shrinkage(individual_params, population_params):
 
 # Example usage
 # Simulated data (replace with real patient data)
-# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt', 'scr'
+# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt', 'scr', 'age'
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
     'time': [0, 1, 2, 0, 1, 2],
     'conc': [10, 5, 2, 12, 6, 3],
     'weight': [70, 70, 70, 80, 80, 80],  # Weight of each patient in kg
     'amt': [1000, 1000, 1000, 1200, 1200, 1200],  # Dose amount (mg)
-    'scr': [1.2, 1.2, 1.2, 1.5, 1.5, 1.5]  # Serum creatinine (mg/dL)
+    'scr': [1.2, 1.2, 1.2, 1.5, 1.5, 1.5],  # Serum creatinine (mg/dL)
+    'age': [45, 45, 45, 60, 60, 60]  # Age of each patient (years)
 })
 
 # Initial guess for population parameters [V1, V2, CL1, CL2, Q]
