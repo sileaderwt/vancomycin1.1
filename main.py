@@ -110,6 +110,7 @@ def predict_batch_new_patients(new_data, pop_params):
     return pd.concat(all_preds, ignore_index=True)
 
 
+
 # Example data
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
