@@ -90,6 +90,11 @@ def estimate_individual_parameters(patient_data, initial_params):
 def calculate_shrinkage(individual_params, population_params):
     return 100 * np.mean(np.abs(np.array(individual_params) - np.array(population_params)) / population_params)
 
+def predict_new_patient(new_patient_data, pop_params):
+    times, preds = solve_two_compartment(new_patient_data, pop_params)
+    pred_df = pd.DataFrame({'time': times, 'pred_conc': preds})
+    return pred_df
+
 # Example data
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
@@ -117,3 +122,29 @@ for pid in data['patient'].unique():
 
 shrinkage = calculate_shrinkage(individuals, pop_params)
 print(f"Shrinkage: {shrinkage:.2f}%")
+
+# Define new patient
+new_patient = pd.DataFrame({
+    'patient': [999, 999, 999],
+    'time':    [0, 1, 2],
+    'amt':     [1000, 0, 0],
+    'evid':    [1, 0, 0],
+    'conc':    [np.nan, np.nan, np.nan],  # No observations, just predictions
+    'weight':  [75, 75, 75],
+    'scr':     [1.1, 1.1, 1.1],
+    'age':     [55, 55, 55],
+    'gender':  [0, 0, 0]  # 0 = male
+})
+
+# Predict using population parameters
+predicted = predict_new_patient(new_patient, pop_params)
+print(predicted)
+
+# Optional: plot prediction
+plt.plot(predicted['time'], predicted['pred_conc'], marker='o', label='Predicted Concentration')
+plt.xlabel("Time (h)")
+plt.ylabel("Concentration")
+plt.title("Prediction for New Patient")
+plt.grid(True)
+plt.legend()
+plt.show()
