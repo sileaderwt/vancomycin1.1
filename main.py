@@ -298,17 +298,7 @@ def plot_boxplot_of_proportions(proportions):
 ###BOXPLOT END
 
 # Example data
-data = pd.DataFrame({
-    'patient': [1, 1, 1, 2, 2, 2],
-    'time': [0, 1, 2, 0, 1, 2],
-    'amt': [1000, 0, 0, 1200, 0, 0],
-    'evid': [1, 0, 0, 1, 0, 0],
-    'conc': [np.nan, 6.0, 2.8, np.nan, 7.1, 3.5],
-    'weight': [70, 70, 70, 80, 80, 80],
-    'scr': [1.2, 1.2, 1.2, 1.0, 1.0, 1.0],
-    'age': [45, 45, 45, 60, 60, 60],
-    'gender': [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
-})
+data = pd.read_excel("sample1.xlsx")
 
 # Initial guess: V1, V2, CL1, CL2, Q
 initial_params = [10, 20, 5, 3, 2]
