@@ -97,6 +97,43 @@ def estimate_individual_parameters(patient_data, initial_params):
 def calculate_shrinkage(individual_params, population_params):
     return 100 * np.mean(np.abs(np.array(individual_params) - np.array(population_params)) / population_params)
 
+def vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95)):
+    all_simulated_concs = []
+
+    # Simulate data for multiple virtual subjects
+    for _ in range(n_simulations):
+        simulated_concs = []
+        for pid, pdata in data.groupby('patient'):
+            times, preds = solve_two_compartment(pdata, pop_params)
+            simulated_concs.append(preds)
+
+        all_simulated_concs.append(np.concatenate(simulated_concs))
+
+    # Calculate percentiles of the simulated concentrations
+    all_simulated_concs = np.concatenate(all_simulated_concs)
+    lower_percentile = np.percentile(all_simulated_concs, percentile_range[0])
+    median_percentile = np.percentile(all_simulated_concs, percentile_range[1])
+    upper_percentile = np.percentile(all_simulated_concs, percentile_range[2])
+
+    # Plot observed vs simulated concentrations (VPC)
+    plt.figure(figsize=(8, 6))
+
+    # Observed data (for reference)
+    obs_data = data[data['evid'] == 0]
+    plt.scatter(obs_data['time'], obs_data['conc'], color='black', alpha=0.6, label='Observed')
+
+    # Simulated data percentiles
+    plt.plot(obs_data['time'], np.repeat(median_percentile, len(obs_data)), 'b--', label='50th Percentile (Median)')
+    plt.fill_between(obs_data['time'], lower_percentile, upper_percentile, color='gray', alpha=0.5,
+                     label='5th-95th Percentile')
+
+    plt.xlabel("Time (h)")
+    plt.ylabel("Concentration (ng/mL)")
+    plt.title("Visual Predictive Check (VPC)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 # Define multiple new patients
 def predict_batch_new_patients(new_data, pop_params):
@@ -110,6 +147,20 @@ def predict_batch_new_patients(new_data, pop_params):
         })
         all_preds.append(pred_df)
     return pd.concat(all_preds, ignore_index=True)
+
+
+def plot_observed_vs_individual(data, individual_params):
+    plt.figure(figsize=(10, 6))
+
+    for pid, pdata in data.groupby('patient'):
+        # Get individual predictions
+        times, preds = solve_two_compartment(pdata, individual_params[pid - 1])
+
+        # Observed concentrations (evid == 0)
+        obs_data = pdata[pdata['evid'] == 0]
+
+        # Plot observed vs individual predicted
+        plt.scatter(preds, obs_data['conc'], label=f'Patient {pid}', alpha=0.6)
 
 
 # Plot conditional weighted residuals
@@ -226,3 +277,5 @@ proportions = simulate_proportions_in_therapeutic_range(data, pop_params)
 # Plot the boxplot
 plot_boxplot_of_proportions(proportions)
 
+
+vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
