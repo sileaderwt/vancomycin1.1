@@ -273,32 +273,61 @@ def vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95)):
 THERAPEUTIC_RANGE_MIN = 5.0
 THERAPEUTIC_RANGE_MAX = 10.0
 
-# Function to determine the proportion in the therapeutic range
-def proportion_in_therapeutic_range(concentrations):
-    return np.sum((concentrations >= THERAPEUTIC_RANGE_MIN) & (concentrations <= THERAPEUTIC_RANGE_MAX)) / len(concentrations)
 
-# Simulate dose adjustments and calculate proportions in the therapeutic range
-def simulate_proportions_in_therapeutic_range(data, pop_params):
-    proportions = []
+# Function to calculate the actual concentrations
+# Function to calculate the actual concentrations
+def simulate_actual_concentrations(data, pop_params):
+    all_concentrations = []  # To store concentrations from all patients
+
     for pid, pdata in data.groupby('patient'):
+        # Simulate concentration-time profile based on population parameters
         times, concs = solve_two_compartment(pdata, pop_params)
-        proportion = proportion_in_therapeutic_range(concs)
-        proportions.append(proportion)
-    return proportions
 
-# Generate the boxplot of the proportions in the therapeutic range
-def plot_boxplot_of_proportions(proportions):
-    print(proportions)
+        # Collect actual concentrations (e.g., concentrations at certain time points)
+        all_concentrations.extend(concs)  # Append the concentrations for this patient
+
+    return all_concentrations
+
+
+# Generate the boxplot of actual concentrations and highlight the therapeutic range
+def plot_boxplot_of_concentrations(concentrations):
     plt.figure(figsize=(8, 6))
-    plt.boxplot(proportions, vert=False)
-    plt.title('Proportion of Patients in Therapeutic Range')
-    plt.xlabel('Proportion in Therapeutic Range')
+
+    # Create the boxplot
+    plt.boxplot(concentrations, patch_artist=True,
+                boxprops=dict(facecolor='skyblue', color='blue'),
+                medianprops=dict(color='red'),
+                whiskerprops=dict(color='blue'),
+                capprops=dict(color='blue'))
+
+    # Highlight the therapeutic range by adding horizontal lines within the plot
+    plt.axhline(y=THERAPEUTIC_RANGE_MIN, color='red', linestyle='--',
+                label=f'Therapeutic Range: {THERAPEUTIC_RANGE_MIN} mg/L')
+    plt.axhline(y=THERAPEUTIC_RANGE_MAX, color='red', linestyle='--')
+
+    # Title and labels
+    plt.title('Distribution of Drug Concentrations')
+    plt.xlabel('Patients')
+    plt.ylabel('Concentration (ng/mL)')
+
+    # Add grid and legend
     plt.grid(True)
+    plt.legend(loc='best')
+
+    # Show the plot
     plt.show()
-###BOXPLOT END
+
+
+# Function to calculate concentrations and plot the boxplot
+def plot_concentrations_and_boxplot(data, pop_params):
+    # Get the actual concentrations from the data and model
+    concentrations = simulate_actual_concentrations(data, pop_params)
+
+    # Generate and show the boxplot with therapeutic range
+    plot_boxplot_of_concentrations(concentrations)
 
 # Example data
-data = pd.read_excel("sample1.xlsx")
+data = pd.read_excel("sample.xlsx")
 
 # Initial guess: V1, V2, CL1, CL2, Q
 initial_params = [10, 20, 5, 3, 2]
@@ -327,5 +356,4 @@ plot_cwres(data, individuals, pop_params)
 vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
 
 #box plot
-proportions = simulate_proportions_in_therapeutic_range(data, pop_params)
-plot_boxplot_of_proportions(proportions)
+plot_concentrations_and_boxplot(data, pop_params)
