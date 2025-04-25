@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # Define the Two-compartment IV bolus model
-def two_compartment_model(t, params, weight, amount):
+def two_compartment_model(t, params, weight, amount, scr):
     """
     Calculate the concentration of drug in two-compartments after an IV bolus dose
     t: time array (hours)
@@ -17,7 +17,20 @@ def two_compartment_model(t, params, weight, amount):
         - Q: Inter-compartmental clearance (L/h)
     weight: Patient's weight (kg)
     amount: Dose amount (mg)
+    scr: Serum creatinine (mg/dL)
     """
+    # Use the Cockcroft-Gault equation to estimate creatinine clearance (Clcr)
+    # For male patients, the formula is:
+    # Clcr = ((140 - age) * weight) / (72 * scr)
+    # For female patients, multiply by 0.85 (adjustment for gender)
+
+    age = 30  # Placeholder value for age; this should be replaced by actual patient data
+    sex_factor = 1.0  # Adjust to 0.85 for females
+    clcr = ((140 - age) * weight) / (72 * scr) * sex_factor  # Creatinine clearance in mL/min
+
+    # Convert Clcr from mL/min to L/h
+    clcr = clcr * 60 / 1000  # Conversion factor
+
     # Scale the parameters by weight (assuming 70 kg as the reference weight)
     V1, V2, CL1, CL2, Q = params
     V1 *= weight / 70
@@ -25,13 +38,15 @@ def two_compartment_model(t, params, weight, amount):
     CL1 *= weight / 70
     CL2 *= weight / 70
 
+    # Adjust renal clearance (CL1) using the calculated creatinine clearance (Clcr)
+    CL1 = CL1 * (clcr / 10)  # Modify CL1 based on Clcr (this is a simplification)
+
     # Define the elimination rate constants
     k10 = CL1 / V1  # Elimination rate constant for compartment 1
     k12 = Q / V1  # Rate constant for transfer from compartment 1 to 2
     k21 = Q / V2  # Rate constant for transfer from compartment 2 to 1
 
     # Solve the system of differential equations (approximated numerically here)
-    # Concentrations in the two compartments at time t
     C1 = (np.exp(-k10 * t) * (V1 / (V1 - V2)) + np.exp(-k12 * t) * (V2 / (V2 - V1)))  # Compartment 1 concentration
     C2 = (np.exp(-k21 * t) * (V2 / (V2 - V1)) + np.exp(-k10 * t) * (V1 / (V1 - V2)))  # Compartment 2 concentration
 
@@ -60,7 +75,8 @@ def population_parameter_estimation(data, initial_params):
             observed_conc = patient_data['conc'].values
             weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
             amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
-            predicted_conc = two_compartment_model(t, params, weight, amount)
+            scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
+            predicted_conc = two_compartment_model(t, params, weight, amount, scr)
             error += np.sum((observed_conc - predicted_conc) ** 2)
         return error
 
@@ -80,10 +96,11 @@ def individual_parameter_estimation(patient_data, initial_params):
     observed_conc = patient_data['conc'].values
     weight = patient_data['weight'].iloc[0]  # Assuming constant weight for each patient
     amount = patient_data['amt'].iloc[0]  # Assuming constant dose for each patient
+    scr = patient_data['scr'].iloc[0]  # Assuming constant SCR for each patient
 
     # Define the objective function for individual parameter estimation
     def objective(params):
-        predicted_conc = two_compartment_model(t, params, weight, amount)
+        predicted_conc = two_compartment_model(t, params, weight, amount, scr)
         return np.sum((observed_conc - predicted_conc) ** 2)
 
     # Optimize the individual parameters for this patient
@@ -104,13 +121,14 @@ def calculate_shrinkage(individual_params, population_params):
 
 # Example usage
 # Simulated data (replace with real patient data)
-# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt'
+# Assume patient data with columns: 'patient', 'time', 'conc', 'weight', 'amt', 'scr'
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
     'time': [0, 1, 2, 0, 1, 2],
     'conc': [10, 5, 2, 12, 6, 3],
     'weight': [70, 70, 70, 80, 80, 80],  # Weight of each patient in kg
-    'amt': [1000, 1000, 1000, 1200, 1200, 1200]  # Dose amount (mg)
+    'amt': [1000, 1000, 1000, 1200, 1200, 1200],  # Dose amount (mg)
+    'scr': [1.2, 1.2, 1.2, 1.5, 1.5, 1.5]  # Serum creatinine (mg/dL)
 })
 
 # Initial guess for population parameters [V1, V2, CL1, CL2, Q]
