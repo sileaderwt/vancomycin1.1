@@ -112,49 +112,48 @@ def predict_batch_new_patients(new_data, pop_params):
     return pd.concat(all_preds, ignore_index=True)
 
 
-# Plot observed vs individual prediction
-def plot_observed_vs_individual(data, individual_params):
+# Plot conditional weighted residuals
+def plot_cwres(data, individual_params, population_params):
     plt.figure(figsize=(10, 6))
 
     for pid, pdata in data.groupby('patient'):
-        # Get individual predictions
-        times, preds = solve_two_compartment(pdata, individual_params[pid - 1])
+        # Get individual and population predictions
+        times, individual_preds = solve_two_compartment(pdata, individual_params[pid - 1])
+        _, population_preds = solve_two_compartment(pdata, population_params)
 
         # Observed concentrations (evid == 0)
         obs_data = pdata[pdata['evid'] == 0]
+        obs_concs = obs_data['conc'].values
 
-        # Plot observed vs individual predicted
-        plt.scatter(preds, obs_data['conc'], label=f'Patient {pid}', alpha=0.6)
+        # Residuals (Observed - Predicted)
+        individual_residuals = obs_concs - individual_preds
+        population_residuals = obs_concs - population_preds
 
-    plt.xlabel("Individual Predicted Concentration (ng/mL)")
-    plt.ylabel("Observed Concentration (ng/mL)")
-    plt.title("Observed vs Individual Predicted Concentrations")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    plt.show()
+        # CWRES = (Residuals) / Standard Deviation (assuming sigma = 1 for simplicity)
+        individual_cwres = individual_residuals  # No weighting for simplicity
+        population_cwres = population_residuals  # No weighting for simplicity
 
+        # Plot Conditional Weighted Residuals for Individual Prediction as dots
+        plt.subplot(2, 1, 1)
+        plt.plot(times, individual_cwres, 'o', label=f'Patient {pid}', alpha=0.6)
+        plt.axhline(0, color='black', linestyle='--', linewidth=1)
+        plt.xlabel("Time Post Dose (h)")
+        plt.ylabel("Conditional Weighted Residuals (Individual)")
+        plt.title("CWRES for Individual Predictions")
+        plt.grid(True)
+        plt.tight_layout()
 
-# Plot observed vs population prediction
-def plot_observed_vs_population(data, pop_params):
-    plt.figure(figsize=(10, 6))
+        # Plot Conditional Weighted Residuals for Population Prediction as dots
+        plt.subplot(2, 1, 2)
+        plt.plot(times, population_cwres, 'o', label=f'Patient {pid}', alpha=0.6)
+        plt.axhline(0, color='black', linestyle='--', linewidth=1)
+        plt.xlabel("Time Post Dose (h)")
+        plt.ylabel("Conditional Weighted Residuals (Population)")
+        plt.title("CWRES for Population Predictions")
+        plt.grid(True)
+        plt.tight_layout()
 
-    for pid, pdata in data.groupby('patient'):
-        # Get population model predictions
-        times, preds = solve_two_compartment(pdata, pop_params)
-
-        # Observed concentrations (evid == 0)
-        obs_data = pdata[pdata['evid'] == 0]
-
-        # Plot observed vs population predicted
-        plt.scatter(preds, obs_data['conc'], label=f'Patient {pid}', alpha=0.6)
-
-    plt.xlabel("Population Predicted Concentration (ng/mL)")
-    plt.ylabel("Observed Concentration (ng/mL)")
-    plt.title("Observed vs Population Predicted Concentrations")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
+    plt.legend(loc='best')
     plt.show()
 
 
@@ -189,8 +188,5 @@ for pid in data['patient'].unique():
 shrinkage = calculate_shrinkage(individuals, pop_params)
 print(f"Shrinkage: {shrinkage:.2f}%")
 
-# Plot the observed vs individual predicted concentrations
-plot_observed_vs_individual(data, individuals)
-
-# Plot the observed vs population predicted concentrations
-plot_observed_vs_population(data, pop_params)
+# Plot CWRES as dots
+plot_cwres(data, individuals, pop_params)
