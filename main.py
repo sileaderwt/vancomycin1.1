@@ -331,7 +331,7 @@ def plot_concentrations_and_boxplot(data, pop_params):
     plot_boxplot_of_concentrations(concentrations)
 
 # Example data
-data = pd.read_excel("sample1.xlsx")
+data = pd.read_excel("sample.xlsx")
 
 # Initial guess: V1, V2, CL1, CL2, Q
 initial_params = [10, 20, 5, 3, 2]
