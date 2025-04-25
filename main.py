@@ -3,7 +3,7 @@ import pandas as pd
 from scipy.integrate import solve_ivp
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
-
+from sklearn.metrics import r2_score, mean_squared_error
 
 # Two-compartment ODE system
 def two_compartment_ode(t, y, V1, V2, CL1, CL2, Q):
@@ -97,6 +97,10 @@ def estimate_individual_parameters(patient_data, initial_params):
 def calculate_shrinkage(individual_params, population_params):
     return 100 * np.mean(np.abs(np.array(individual_params) - np.array(population_params)) / population_params)
 
+def predict_new_patient(new_patient_data, pop_params):
+    times, preds = solve_two_compartment(new_patient_data, pop_params)
+    pred_df = pd.DataFrame({'time': times, 'pred_conc': preds})
+    return pred_df
 
 # Define multiple new patients
 def predict_batch_new_patients(new_data, pop_params):
@@ -327,7 +331,7 @@ def plot_concentrations_and_boxplot(data, pop_params):
     plot_boxplot_of_concentrations(concentrations)
 
 # Example data
-data = pd.read_excel("sample.xlsx")
+data = pd.read_excel("sample1.xlsx")
 
 # Initial guess: V1, V2, CL1, CL2, Q
 initial_params = [10, 20, 5, 3, 2]
@@ -335,6 +339,56 @@ initial_params = [10, 20, 5, 3, 2]
 # Run population parameter estimation
 pop_params = estimate_population_parameters(data, initial_params)
 print("Estimated Population Parameters:", pop_params)
+# Convert to DataFrame for plotting
+# Collect observed vs predicted data
+
+#######R^2 error and RMSE
+observed_vs_predicted = []
+
+for pid in data['patient'].unique():
+    pdata = data[data['patient'] == pid]
+    ind_params = estimate_individual_parameters(pdata, pop_params)
+
+    # Get observed time points
+    obs_data = pdata[pdata['evid'] == 0]
+    obs_times = obs_data['time'].values
+    obs_concs = obs_data['conc'].values
+
+
+    # Simulate at those times
+    def simulate_at_obs_times(params):
+        sol = solve_ivp(
+            fun=two_compartment_ode,
+            t_span=[0, max(obs_times)],
+            y0=[pdata[pdata['evid'] == 1]['amt'].sum(), 0],
+            args=tuple(params),
+            t_eval=obs_times
+        )
+        return sol.y[0] / (params[0] * pdata['weight'].iloc[0] / 70)  # A1 / V1
+
+
+    pred_concs = simulate_at_obs_times(ind_params)
+
+    for t, obs, pred in zip(obs_times, obs_concs, pred_concs):
+        observed_vs_predicted.append({
+            'patient': pid,
+            'time': t,
+            'observed': obs,
+            'predicted': pred
+        })
+
+ovp_df = pd.DataFrame(observed_vs_predicted)
+# R² and RMSE for Individual Fits
+r2 = r2_score(ovp_df['observed'], ovp_df['predicted'])
+rmse = mean_squared_error(ovp_df['observed'], ovp_df['predicted'])
+
+print(f"R²: {r2:.2f}")
+print(f"RMSE: {rmse:.2f}")
+
+
+#######R^2 error and RMSE
+
+
 
 # Estimate individual parameters
 individuals = []
