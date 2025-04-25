@@ -112,9 +112,11 @@ def predict_batch_new_patients(new_data, pop_params):
     return pd.concat(all_preds, ignore_index=True)
 
 
-# Plot observed vs individual prediction
 def plot_observed_vs_individual(data, individual_params):
     plt.figure(figsize=(10, 6))
+
+    all_preds = []
+    all_obs = []
 
     for pid, pdata in data.groupby('patient'):
         # Get individual predictions
@@ -122,9 +124,19 @@ def plot_observed_vs_individual(data, individual_params):
 
         # Observed concentrations (evid == 0)
         obs_data = pdata[pdata['evid'] == 0]
+        obs_concs = obs_data['conc'].values
+
+        # Store for setting axis limits
+        all_preds.extend(preds)
+        all_obs.extend(obs_concs)
 
         # Plot observed vs individual predicted
-        plt.scatter(preds, obs_data['conc'], label=f'Patient {pid}', alpha=0.6)
+        plt.scatter(preds, obs_concs, label=f'Patient {pid}', alpha=0.6)
+
+    # Diagonal identity line
+    min_val = min(min(all_preds), min(all_obs))
+    max_val = max(max(all_preds), max(all_obs))
+    plt.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=2, label='Identity Line')
 
     plt.xlabel("Individual Predicted Concentration (ng/mL)")
     plt.ylabel("Observed Concentration (ng/mL)")
@@ -135,9 +147,13 @@ def plot_observed_vs_individual(data, individual_params):
     plt.show()
 
 
+
 # Plot observed vs population prediction
 def plot_observed_vs_population(data, pop_params):
     plt.figure(figsize=(10, 6))
+
+    all_preds = []
+    all_obs = []
 
     for pid, pdata in data.groupby('patient'):
         # Get population model predictions
@@ -145,9 +161,19 @@ def plot_observed_vs_population(data, pop_params):
 
         # Observed concentrations (evid == 0)
         obs_data = pdata[pdata['evid'] == 0]
+        obs_concs = obs_data['conc'].values
+
+        # Store all points for setting axis limits
+        all_preds.extend(preds)
+        all_obs.extend(obs_concs)
 
         # Plot observed vs population predicted
-        plt.scatter(preds, obs_data['conc'], label=f'Patient {pid}', alpha=0.6)
+        plt.scatter(preds, obs_concs, label=f'Patient {pid}', alpha=0.6)
+
+    # Diagonal identity line
+    min_val = min(min(all_preds), min(all_obs))
+    max_val = max(max(all_preds), max(all_obs))
+    plt.plot([min_val, max_val], [min_val, max_val], 'k--', linewidth=2, label='Identity Line')
 
     plt.xlabel("Population Predicted Concentration (ng/mL)")
     plt.ylabel("Observed Concentration (ng/mL)")
@@ -159,45 +185,44 @@ def plot_observed_vs_population(data, pop_params):
 
 # Plot conditional weighted residuals
 def plot_cwres(data, individual_params, population_params):
+    # Plot Individual CWRES
     plt.figure(figsize=(10, 6))
-
     for pid, pdata in data.groupby('patient'):
-        # Get individual and population predictions
         times, individual_preds = solve_two_compartment(pdata, individual_params[pid - 1])
-        _, population_preds = solve_two_compartment(pdata, population_params)
-
-        # Observed concentrations (evid == 0)
         obs_data = pdata[pdata['evid'] == 0]
         obs_concs = obs_data['conc'].values
-
-        # Residuals (Observed - Predicted)
         individual_residuals = obs_concs - individual_preds
-        population_residuals = obs_concs - population_preds
+        individual_cwres = individual_residuals  # assuming sigma = 1
 
-        # CWRES = (Residuals) / Standard Deviation (assuming sigma = 1 for simplicity)
-        individual_cwres = individual_residuals  # No weighting for simplicity
-        population_cwres = population_residuals  # No weighting for simplicity
-
-        # Plot Conditional Weighted Residuals for Individual Prediction as dots
-        plt.subplot(2, 1, 1)
         plt.plot(times, individual_cwres, 'o', label=f'Patient {pid}', alpha=0.6)
-        plt.axhline(0, color='black', linestyle='--', linewidth=1)
-        plt.xlabel("Time Post Dose (h)")
-        plt.ylabel("Conditional Weighted Residuals (Individual)")
-        plt.title("CWRES for Individual Predictions")
-        plt.grid(True)
-        plt.tight_layout()
 
-        # Plot Conditional Weighted Residuals for Population Prediction as dots
-        plt.subplot(2, 1, 2)
+    plt.axhline(0, color='black', linestyle='--', linewidth=1)
+    plt.xlabel("Time Post Dose (h)")
+    plt.ylabel("Conditional Weighted Residuals (Individual)")
+    plt.title("CWRES for Individual Predictions")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend(loc='best')
+    plt.show()
+
+    # Plot Population CWRES
+    plt.figure(figsize=(10, 6))
+    for pid, pdata in data.groupby('patient'):
+        _, population_preds = solve_two_compartment(pdata, population_params)
+        obs_data = pdata[pdata['evid'] == 0]
+        obs_concs = obs_data['conc'].values
+        population_residuals = obs_concs - population_preds
+        population_cwres = population_residuals  # assuming sigma = 1
+
+        times = pdata[pdata['evid'] == 0]['time'].values
         plt.plot(times, population_cwres, 'o', label=f'Patient {pid}', alpha=0.6)
-        plt.axhline(0, color='black', linestyle='--', linewidth=1)
-        plt.xlabel("Time Post Dose (h)")
-        plt.ylabel("Conditional Weighted Residuals (Population)")
-        plt.title("CWRES for Population Predictions")
-        plt.grid(True)
-        plt.tight_layout()
 
+    plt.axhline(0, color='black', linestyle='--', linewidth=1)
+    plt.xlabel("Time Post Dose (h)")
+    plt.ylabel("Conditional Weighted Residuals (Population)")
+    plt.title("CWRES for Population Predictions")
+    plt.grid(True)
+    plt.tight_layout()
     plt.legend(loc='best')
     plt.show()
 
