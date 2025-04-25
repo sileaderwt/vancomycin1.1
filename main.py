@@ -95,6 +95,21 @@ def predict_new_patient(new_patient_data, pop_params):
     pred_df = pd.DataFrame({'time': times, 'pred_conc': preds})
     return pred_df
 
+def predict_batch_new_patients(new_data, pop_params):
+    all_preds = []
+
+    for pid, pdata in new_data.groupby('patient'):
+        times, preds = solve_two_compartment(pdata, pop_params)
+        pred_df = pd.DataFrame({
+            'patient': pid,
+            'time': times,
+            'pred_conc': preds
+        })
+        all_preds.append(pred_df)
+
+    return pd.concat(all_preds, ignore_index=True)
+
+
 # Example data
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
@@ -123,28 +138,31 @@ for pid in data['patient'].unique():
 shrinkage = calculate_shrinkage(individuals, pop_params)
 print(f"Shrinkage: {shrinkage:.2f}%")
 
-# Define new patient
-new_patient = pd.DataFrame({
-    'patient': [999, 999, 999],
-    'time':    [0, 1, 2],
-    'amt':     [1000, 0, 0],
-    'evid':    [1, 0, 0],
-    'conc':    [np.nan, np.nan, np.nan],  # No observations, just predictions
-    'weight':  [75, 75, 75],
-    'scr':     [1.1, 1.1, 1.1],
-    'age':     [55, 55, 55],
-    'gender':  [0, 0, 0]  # 0 = male
+# Define multiple new patients
+new_patients = pd.DataFrame({
+    'patient': [999, 999, 999, 1000, 1000, 1000],
+    'time':    [0, 1, 2, 0, 1, 2],
+    'amt':     [1000, 0, 0, 900, 0, 0],
+    'evid':    [1, 0, 0, 1, 0, 0],
+    'conc':    [np.nan] * 6,
+    'weight':  [75, 75, 75, 60, 60, 60],
+    'scr':     [1.1, 1.1, 1.1, 1.3, 1.3, 1.3],
+    'age':     [55, 55, 55, 40, 40, 40],
+    'gender':  [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
 })
 
-# Predict using population parameters
-predicted = predict_new_patient(new_patient, pop_params)
-print(predicted)
+# Predict
+batch_preds = predict_batch_new_patients(new_patients, pop_params)
+print(batch_preds)
 
-# Optional: plot prediction
-plt.plot(predicted['time'], predicted['pred_conc'], marker='o', label='Predicted Concentration')
+# Plot results
+for pid in batch_preds['patient'].unique():
+    patient_pred = batch_preds[batch_preds['patient'] == pid]
+    plt.plot(patient_pred['time'], patient_pred['pred_conc'], marker='o', label=f'Patient {pid}')
+
 plt.xlabel("Time (h)")
-plt.ylabel("Concentration")
-plt.title("Prediction for New Patient")
+plt.ylabel("Predicted Concentration")
+plt.title("Predicted Concentrations for New Patients")
 plt.grid(True)
 plt.legend()
 plt.show()
