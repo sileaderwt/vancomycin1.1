@@ -402,15 +402,15 @@ shrinkage = calculate_shrinkage(individuals, pop_params)
 print(f"Shrinkage: {shrinkage:.2f}%")
 
 # Plot the observed vs individual predicted concentrations
-# plot_observed_vs_individual(data, individuals)
+plot_observed_vs_individual(data, individuals)
 # Plot the observed vs population predicted concentrations
-# plot_observed_vs_population(data, pop_params)
-# plot_cwres(data, individuals, pop_params)
+plot_observed_vs_population(data, pop_params)
+plot_cwres(data, individuals, pop_params)
 # Perform Visual Predictive Check
-# vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
+vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
 
 #box plot
-# plot_concentrations_and_boxplot(data, pop_params)
+plot_concentrations_and_boxplot(data, pop_params)
 
 
 
