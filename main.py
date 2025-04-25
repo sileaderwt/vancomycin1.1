@@ -402,12 +402,42 @@ shrinkage = calculate_shrinkage(individuals, pop_params)
 print(f"Shrinkage: {shrinkage:.2f}%")
 
 # Plot the observed vs individual predicted concentrations
-plot_observed_vs_individual(data, individuals)
+# plot_observed_vs_individual(data, individuals)
 # Plot the observed vs population predicted concentrations
-plot_observed_vs_population(data, pop_params)
-plot_cwres(data, individuals, pop_params)
+# plot_observed_vs_population(data, pop_params)
+# plot_cwres(data, individuals, pop_params)
 # Perform Visual Predictive Check
-vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
+# vpc(data, pop_params, n_simulations=1000, percentile_range=(5, 50, 95))
 
 #box plot
-plot_concentrations_and_boxplot(data, pop_params)
+# plot_concentrations_and_boxplot(data, pop_params)
+
+
+
+###SIMULATE FOR NEW PATIENT
+# Assuming you have new patient data
+new_patient = pd.DataFrame({
+    'patient': [999, 999, 999],
+    'time':    [0, 1, 2],
+    'amt':     [1000, 0, 0],
+    'evid':    [1, 0, 0],
+    'conc':    [np.nan, np.nan, np.nan],  # No observations, just predictions
+    'weight':  [75, 75, 75],
+    'scr':     [1.1, 1.1, 1.1],
+    'age':     [55, 55, 55],
+    'gender':  [0, 0, 0]  # 0 = male
+})
+
+# Predict using population parameters
+predicted = predict_new_patient(new_patient, pop_params)
+print(predicted)
+
+# Optional: plot prediction
+plt.plot(predicted['time'], predicted['pred_conc'], marker='o', label='Predicted Concentration')
+plt.xlabel("Time (h)")
+plt.ylabel("Concentration")
+plt.title("Prediction for New Patient")
+plt.grid(True)
+plt.legend()
+plt.show()
+###SIMULATE FOR NEW PATIENT
