@@ -3,6 +3,8 @@ import pandas as pd
 from scipy.integrate import solve_ivp
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score, mean_squared_error
+
 
 # Two-compartment ODE system
 def two_compartment_ode(t, y, V1, V2, CL1, CL2, Q):
@@ -10,6 +12,7 @@ def two_compartment_ode(t, y, V1, V2, CL1, CL2, Q):
     dA1dt = - (CL1 / V1) * A1 - Q * (A1 / V1 - A2 / V2)
     dA2dt = Q * (A1 / V1 - A2 / V2)
     return [dA1dt, dA2dt]
+
 
 # Solve the system for one patient
 def solve_two_compartment(patient_data, base_params):
@@ -61,6 +64,7 @@ def solve_two_compartment(patient_data, base_params):
 
     return np.array(result_times), np.array(result_concs)
 
+
 # Population objective function
 def population_objective(params, data):
     total_error = 0
@@ -72,10 +76,12 @@ def population_objective(params, data):
         total_error += error
     return total_error
 
+
 # Estimate population parameters
 def estimate_population_parameters(data, initial_params):
     result = minimize(population_objective, initial_params, args=(data,), method='L-BFGS-B')
     return result.x
+
 
 # Estimate individual parameters
 def estimate_individual_parameters(patient_data, initial_params):
@@ -83,17 +89,21 @@ def estimate_individual_parameters(patient_data, initial_params):
         _, pred_concs = solve_two_compartment(patient_data, params)
         obs_concs = patient_data[patient_data['evid'] == 0]['conc'].values
         return np.sum((obs_concs - pred_concs) ** 2)
+
     result = minimize(individual_objective, initial_params, method='L-BFGS-B')
     return result.x
+
 
 # Shrinkage
 def calculate_shrinkage(individual_params, population_params):
     return 100 * np.mean(np.abs(np.array(individual_params) - np.array(population_params)) / population_params)
 
+
 def predict_new_patient(new_patient_data, pop_params):
     times, preds = solve_two_compartment(new_patient_data, pop_params)
     pred_df = pd.DataFrame({'time': times, 'pred_conc': preds})
     return pred_df
+
 
 def predict_batch_new_patients(new_data, pop_params):
     all_preds = []
@@ -110,53 +120,103 @@ def predict_batch_new_patients(new_data, pop_params):
     return pd.concat(all_preds, ignore_index=True)
 
 
-
 # Example data
 data = pd.DataFrame({
     'patient': [1, 1, 1, 2, 2, 2],
-    'time':    [0, 1, 2, 0, 1, 2],
-    'amt':     [1000, 0, 0, 1200, 0, 0],
-    'evid':    [1, 0, 0, 1, 0, 0],
-    'conc':    [np.nan, 6.0, 2.8, np.nan, 7.1, 3.5],
-    'weight':  [70, 70, 70, 80, 80, 80],
-    'scr':     [1.2, 1.2, 1.2, 1.0, 1.0, 1.0],
-    'age':     [45, 45, 45, 60, 60, 60],
-    'gender':  [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
+    'time': [0, 1, 2, 0, 1, 2],
+    'amt': [1000, 0, 0, 1200, 0, 0],
+    'evid': [1, 0, 0, 1, 0, 0],
+    'conc': [np.nan, 6.0, 2.8, np.nan, 7.1, 3.5],
+    'weight': [70, 70, 70, 80, 80, 80],
+    'scr': [1.2, 1.2, 1.2, 1.0, 1.0, 1.0],
+    'age': [45, 45, 45, 60, 60, 60],
+    'gender': [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
 })
+
 # Initial guess: V1, V2, CL1, CL2, Q
 initial_params = [10, 20, 5, 3, 2]
 
-# Run estimation
+# Run population parameter estimation
 pop_params = estimate_population_parameters(data, initial_params)
 print("Estimated Population Parameters:", pop_params)
 
-individuals = []
+# Collect observed vs predicted data
+observed_vs_predicted = []
+
 for pid in data['patient'].unique():
     pdata = data[data['patient'] == pid]
     ind_params = estimate_individual_parameters(pdata, pop_params)
-    individuals.append(ind_params)
 
-shrinkage = calculate_shrinkage(individuals, pop_params)
-print(f"Shrinkage: {shrinkage:.2f}%")
+    # Get observed time points
+    obs_data = pdata[pdata['evid'] == 0]
+    obs_times = obs_data['time'].values
+    obs_concs = obs_data['conc'].values
 
-# Define multiple new patients
+
+    # Simulate at those times
+    def simulate_at_obs_times(params):
+        sol = solve_ivp(
+            fun=two_compartment_ode,
+            t_span=[0, max(obs_times)],
+            y0=[pdata[pdata['evid'] == 1]['amt'].sum(), 0],
+            args=tuple(params),
+            t_eval=obs_times
+        )
+        return sol.y[0] / (params[0] * pdata['weight'].iloc[0] / 70)  # A1 / V1
+
+
+    pred_concs = simulate_at_obs_times(ind_params)
+
+    for t, obs, pred in zip(obs_times, obs_concs, pred_concs):
+        observed_vs_predicted.append({
+            'patient': pid,
+            'time': t,
+            'observed': obs,
+            'predicted': pred
+        })
+
+# Convert to DataFrame for plotting
+ovp_df = pd.DataFrame(observed_vs_predicted)
+
+# Observed vs Predicted Plot (Individual Fit)
+plt.figure(figsize=(8, 6))
+plt.scatter(ovp_df['observed'], ovp_df['predicted'], alpha=0.7)
+plt.plot([0, ovp_df[['observed', 'predicted']].max().max()],
+         [0, ovp_df[['observed', 'predicted']].max().max()],
+         'r--', label='Line of Identity')
+
+plt.xlabel("Observed Concentration")
+plt.ylabel("Predicted Concentration")
+plt.title("Observed vs Predicted Concentration (Individual Fit)")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# R² and RMSE for Individual Fits
+r2 = r2_score(ovp_df['observed'], ovp_df['predicted'])
+rmse = mean_squared_error(ovp_df['observed'], ovp_df['predicted'])
+
+print(f"R²: {r2:.2f}")
+print(f"RMSE: {rmse:.2f}")
+
+# Predict new patients using population parameters
 new_patients = pd.DataFrame({
     'patient': [999, 999, 999, 1000, 1000, 1000],
-    'time':    [0, 1, 2, 0, 1, 2],
-    'amt':     [1000, 0, 0, 900, 0, 0],
-    'evid':    [1, 0, 0, 1, 0, 0],
-    'conc':    [np.nan] * 6,
-    'weight':  [75, 75, 75, 60, 60, 60],
-    'scr':     [1.1, 1.1, 1.1, 1.3, 1.3, 1.3],
-    'age':     [55, 55, 55, 40, 40, 40],
-    'gender':  [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
+    'time': [0, 1, 2, 0, 1, 2],
+    'amt': [1000, 0, 0, 900, 0, 0],
+    'evid': [1, 0, 0, 1, 0, 0],
+    'conc': [np.nan] * 6,
+    'weight': [75, 75, 75, 60, 60, 60],
+    'scr': [1.1, 1.1, 1.1, 1.3, 1.3, 1.3],
+    'age': [55, 55, 55, 40, 40, 40],
+    'gender': [0, 0, 0, 1, 1, 1]  # 0 = male, 1 = female
 })
 
-# Predict
 batch_preds = predict_batch_new_patients(new_patients, pop_params)
 print(batch_preds)
 
-# Plot results
+# Plot population predictions for new patients
 for pid in batch_preds['patient'].unique():
     patient_pred = batch_preds[batch_preds['patient'] == pid]
     plt.plot(patient_pred['time'], patient_pred['pred_conc'], marker='o', label=f'Patient {pid}')
